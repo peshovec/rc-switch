@@ -151,7 +151,11 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
   { 365,  0, { 0, 0 }, 1, {  18,  1 }, { 3,  1 }, { 1, 3 }, true,   0 }, // 32 (1ByOne Doorbell) from @Fatbeard https://github.com/sui77/rc-switch/pull/277
   { 340,  0, { 0, 0 }, 1, {  14,  4 }, { 1,  2 }, { 2, 1 }, false,  0 }, // 33 (Dooya Control DC2708L)
   { 120,  0, { 0, 0 }, 1, {   1, 28 }, { 1,  3 }, { 3, 1 }, false,  0 }, // 34 DIGOO SD10 - so as to use this protocol RCSWITCH_SEPARATION_LIMIT must be set to 2600
-  { 275,  0, { 0, 0 }, 1, {   1, 10 }, { 1,  1 }, { 1, 5 }, false, 37 }  // 35 (SmartWares/HomeEasy)
+  { 275,  0, { 0, 0 }, 1, {   1, 10 }, {  1,  1 }, {  1, 5 }, false, 37 }, // 35 (SmartWares/HomeEasy)
+  { 200,  0, { 0, 0 }, 1, {   3,130 }, {  7, 16 }, {  3,16 }, false,  0 }, // 36 Conrad RS-200 RX
+  { 200,  0, { 0, 0 }, 1, { 130,  7 }, { 16,  7 }, { 16, 3 }, true,   0 }, // 37 Conrad RS-200 TX
+  { 270,  0, { 0, 0 }, 1, {  36,  1 }, {  1,  2 }, {  2, 1 }, true,   0 }  // 38 (HT12E)
+
 };
 
 enum {
