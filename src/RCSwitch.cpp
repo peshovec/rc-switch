@@ -854,8 +854,8 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
         (diff(RCSwitch::buftimings[3], RCSwitch::timings[1]) < 50 &&
           diff(RCSwitch::buftimings[2], RCSwitch::timings[2]) < 50 &&
           diff(RCSwitch::buftimings[1], RCSwitch::timings[3]) < 50 &&
-          changeCount > 25) ||
-          repeatCount==0) {
+          changeCount > 25) { //||
+      //    repeatCount==0) { // did not get that, as repetCount is 0, so revert for now
       // если его длительность отличается от первого импульса, 
       // который приняли раньше, менее чем на +-200 (исходно 200)
       // то считаем это повторным пакетом и игнорируем его
@@ -869,12 +869,24 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
       repeatCount++;
       // при приеме второго повторного начинаем анализ принятого первым
       if (repeatCount == 1) {
+      // TODO - fix me later - force custom protocols first
+      bool contProto = true; // if custom fail - then continue as usual. try 36 and 35 - the smartawares one
+      if (receiveProtocol(36, changeCount)) {
+        contProto = false;
+      }
+
+      if ( contProto && (receiveProtocol(35, changeCount) )) {
+        conProto = false;
+      }
+
+      if (contProto) {
         for(unsigned int i = 1; i <= numProto; i++) {
           if (receiveProtocol(i, changeCount)) {
             // receive succeeded for protocol i
             break;
           }
         }
+      }
         // очищаем количество повторных пакетов
         repeatCount = 0;
       }
