@@ -876,7 +876,7 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
       }
 
       if ( contProto && (receiveProtocol(35, changeCount) )) {
-        conProto = false;
+        contProto = false;
       }
 
       if (contProto) {
