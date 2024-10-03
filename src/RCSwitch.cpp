@@ -854,7 +854,7 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
         (diff(RCSwitch::buftimings[3], RCSwitch::timings[1]) < 50 &&
           diff(RCSwitch::buftimings[2], RCSwitch::timings[2]) < 50 &&
           diff(RCSwitch::buftimings[1], RCSwitch::timings[3]) < 50 &&
-          changeCount > 25) { //||
+          changeCount > 25)) { //||
       //    repeatCount==0) { // did not get that, as repetCount is 0, so revert for now
       // если его длительность отличается от первого импульса, 
       // который приняли раньше, менее чем на +-200 (исходно 200)
