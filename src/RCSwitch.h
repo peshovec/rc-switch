@@ -119,6 +119,13 @@ class RCSwitch {
         uint8_t low;
     };
 
+    struct DoubleHighLow {
+        uint8_t high;
+        uint8_t low;
+        uint8_t highS;
+        uint8_t lowS;
+    };
+
     /**
      * A "protocol" describes how zero and one bits are encoded into high/low
      * pulses.
@@ -133,6 +140,37 @@ class RCSwitch {
 
         HighLow zero;
         HighLow one;
+
+        /**
+         * If true, interchange high and low logic levels in all transmissions.
+         *
+         * By default, RCSwitch assumes that any signals it sends or receives
+         * can be broken down into pulses which start with a high signal level,
+         * followed by a a low signal level. This is e.g. the case for the
+         * popular PT 2260 encoder chip, and thus many switches out there.
+         *
+         * But some devices do it the other way around, and start with a low
+         * signal level, followed by a high signal level, e.g. the HT6P20B. To
+         * accommodate this, one can set invertedSignal to true, which causes
+         * RCSwitch to change how it interprets any HighLow struct FOO: It will
+         * then assume transmissions start with a low signal lasting
+         * FOO.high*pulseLength microseconds, followed by a high signal lasting
+         * FOO.low*pulseLength microseconds.
+         */
+        bool invertedSignal;
+        uint16_t Guard;
+    };
+
+    struct ProtocolD {
+        /** base pulse length in microseconds, e.g. 350 */
+        uint16_t pulseLength;
+        uint8_t PreambleFactor;
+        HighLow Preamble;
+        uint8_t HeaderFactor;
+        HighLow Header;
+
+        DoubleHighLow zero;
+        DoubleHighLow one;
 
         /**
          * If true, interchange high and low logic levels in all transmissions.
@@ -169,6 +207,7 @@ class RCSwitch {
     #if not defined( RCSwitchDisableReceiving )
     static void handleInterrupt();
     static bool receiveProtocol(const int p, unsigned int changeCount);
+    static bool receiveProtocolD(const int p, unsigned int changeCount);
     int nReceiverInterrupt;
     #endif
     int nTransmitterPin;

@@ -158,7 +158,12 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
   { 270,  0, { 0, 0 }, 1, {  36,  1 }, {  1,  2 }, {  2, 1 }, true,   0 }  // 39 (HT12E)
 
 };
+/// TODO improve me- for now just quick experiment
+static const VAR_ISR_ATTR RCSwitch::ProtocolD protoD[] = {
+{ 260,  0, { 0, 0 }, 1, {   1, 10 }, {  1,  1, 1, 5 }, {  1, 5, 1, 1 }, false, 36 }, // 36 - 35v1 - belived to be perfect match of the original remote
+{ 275,  0, { 0, 0 }, 1, {   1, 10 }, {  1,  1, 1, 5 }, {  1, 5, 1, 1 }, false, 37 } // 35 (SmartWares/HomeEasy)
 
+};
 enum {
    numProto = sizeof(proto) / sizeof(proto[0])
 };
@@ -827,6 +832,106 @@ bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCoun
     return false;
 }
 
+
+bool RECEIVE_ATTR RCSwitch::receiveProtocolD(const int p, unsigned int changeCount) {
+#if defined(ESP8266) || defined(ESP32)
+    const ProtocolD &pro = protoD[p-1];
+#else
+    ProtocoliD pro;
+    memcpy_P(&pro, &protoD[p-1], sizeof(ProtocolD));
+#endif
+
+    unsigned long long code = 0;
+    unsigned int FirstTiming = 0;
+    if (pro.PreambleFactor > 0) {
+      FirstTiming = pro.PreambleFactor + 1;
+    }
+    unsigned int BeginData = 0;
+    if (pro.HeaderFactor > 0) {
+      BeginData = (pro.invertedSignal) ? (2) : (1);
+      // Header pulse count correction for more than one
+      if (pro.HeaderFactor > 1) {
+        BeginData += (pro.HeaderFactor - 1) * 2;
+      }
+    }
+    //Assuming the longer pulse length is the pulse captured in timings[FirstTiming]
+    // берем наибольшее значение из Header
+    const unsigned int syncLengthInPulses =  ((pro.Header.low) > (pro.Header.high)) ? (pro.Header.low) : (pro.Header.high);
+    // определяем длительность Te как длительность первого импульса header деленную на количество импульсов в нем
+    // или как длительность импульса preamble деленную на количество Te в нем
+    unsigned int sdelay = 0;
+    if (syncLengthInPulses > 0) {
+      sdelay = RCSwitch::timings[FirstTiming] / syncLengthInPulses;
+    } else {
+      sdelay = RCSwitch::timings[FirstTiming-2] / pro.PreambleFactor;
+    }
+    const unsigned int delay = sdelay;
+    // nReceiveTolerance = 60
+    // допустимое отклонение длительностей импульсов на 60 %
+    const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
+    
+    // 0 - sync перед preamble или data
+    // BeginData - сдвиг на 1 или 2 от sync к preamble/data
+    // FirstTiming - сдвиг на preamble к header
+    // firstDataTiming первый импульс data
+    // bitChangeCount - количество импульсов в data
+
+    /* For protocols that start low, the sync period looks like
+     *               _________
+     * _____________|         |XXXXXXXXXXXX|
+     *
+     * |--1st dur--|-2nd dur-|-Start data-|
+     *
+     * The 3rd saved duration starts the data.
+     *
+     * For protocols that start high, the sync period looks like
+     *
+     *  ______________
+     * |              |____________|XXXXXXXXXXXXX|
+     *
+     * |-filtered out-|--1st dur--|--Start data--|
+     *
+     * The 2nd saved duration starts the data
+     */
+    // если invertedSignal=false, то сигнал начинается с 1 элемента массива (высокий уровень)
+    // если invertedSignal=true, то сигнал начинается со 2 элемента массива (низкий уровень)
+    // добавляем поправку на Преамбулу и Хедер
+    const unsigned int firstDataTiming = BeginData + FirstTiming;
+    unsigned int bitChangeCount = changeCount - firstDataTiming - 1 + pro.invertedSignal;
+    if (bitChangeCount > 256) {
+      bitChangeCount = 256;
+    }
+
+    for (unsigned int i = firstDataTiming; i < firstDataTiming + bitChangeCount; i += 4) {
+        code <<= 1;
+        if (diff(RCSwitch::timings[i], delay * pro.zero.high) < delayTolerance &&
+            diff(RCSwitch::timings[i + 1], delay * pro.zero.low) < delayTolerance &&
+            diff(RCSwitch::timings[i + 2], delay * pro.zero.highS) < delayTolerance &&
+            diff(RCSwitch::timings[i + 3], delay * pro.zero.lowS) < delayTolerance) {
+            // zero
+        } else if (diff(RCSwitch::timings[i], delay * pro.one.high) < delayTolerance &&
+                   diff(RCSwitch::timings[i + 1], delay * pro.one.low) < delayTolerance &&
+                   diff(RCSwitch::timings[i + 2], delay * pro.one.highS) < delayTolerance &&
+                   diff(RCSwitch::timings[i + 3], delay * pro.one.lowS) < delayTolerance) {
+            // one
+            code |= 1;
+        } else {
+            // Failed
+            return false;
+        }
+    }
+
+    if (bitChangeCount > 14) {    // ignore very short transmissions: no device sends them, so this must be noise
+        RCSwitch::nReceivedValue = code;
+        RCSwitch::nReceivedBitlength = bitChangeCount / 2;
+        RCSwitch::nReceivedDelay = delay;
+        RCSwitch::nReceivedProtocol = p;
+        return true;
+    }
+
+    return false;
+}
+
 void RECEIVE_ATTR RCSwitch::handleInterrupt() {
 
   static unsigned int changeCount = 0;
@@ -871,11 +976,11 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
       if (repeatCount == 1) {
       // TODO - fix me later - force custom protocols first
       bool contProto = true; // if custom fail - then continue as usual. try 36 and 35 - the smartawares one
-      if (receiveProtocol(36, changeCount)) {
+      if (receiveProtocolD(1, changeCount)) {
         contProto = false;
       }
 
-      if ( contProto && (receiveProtocol(35, changeCount) )) {
+      if ( contProto && (receiveProtocolD(2, changeCount) )) {
         contProto = false;
       }
 
